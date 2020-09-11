@@ -94,6 +94,8 @@ def iter_chunks(select_query, conn, parameters=(),
 
             # Apply row_factory
             rows = (create_row(row) for row in rows)
+            rows_postgres = StringIteratorIO((
+                '|'.join(map(clean_csv_value, row)) + '\n' for row in rows))
             logger.info(f'POSTGRES- iter_chunks - applied row factory')
 
             # Apply transform
@@ -102,7 +104,7 @@ def iter_chunks(select_query, conn, parameters=(),
 
             logger.info(f'POSTGRES- iter_chunks - yielding rows {rows}')
             # Return data
-            yield rows
+            yield rows_postgres
             first_pass = False
 
 
@@ -240,12 +242,12 @@ def executemany_postgres(dest_table, rows, conn, commit_chunks=True):
     processed = 0
 
     with helper.cursor(conn) as cursor:
-        string_iterator = StringIteratorIO((
-            '|'.join(map(clean_csv_value, row)) + '\n'
-            for row in rows
-        ))
+        # string_iterator = StringIteratorIO((
+        #     '|'.join(map(clean_csv_value, row)) + '\n'
+        #     for row in rows
+        # ))
         logger.info('POSTGRES- string_iterator created')
-        cursor.copy_from(string_iterator, dest_table, sep='|', size=CHUNKSIZE)
+        cursor.copy_from(rows, dest_table, sep='|', size=CHUNKSIZE)
 
 
 def executemany(query, rows, conn, commit_chunks=True):
