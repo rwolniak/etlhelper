@@ -12,9 +12,11 @@ from etlhelper.exceptions import (
     ETLHelperInsertError,
     ETLHelperQueryError,
 )
+from io_iterator import StringIteratorIO
+from io import Optional, Any
 
 logger = logging.getLogger('etlhelper')
-CHUNKSIZE = 5000
+CHUNKSIZE = 8192
 
 
 # iter_chunks is where data are retrieved from source database
@@ -210,6 +212,32 @@ def dump_rows(select_query, conn, output_func=print, parameters=(),
         output_func(row)
 
 
+def clean_csv_value(value: Optional[Any]) -> str:
+    if value is None:
+        return r'\N'
+    return str(value).replace('\n', '\\n')
+
+
+def executemany_postgres(dest_table, rows, conn, commit_chunks=True):
+    msg = ("executemany parameter order will be changed in a future release to "
+           "(query, conn, rows).  "
+           "Avoid breaking code by using named parameters for all e.g. "
+           "executemany(query=my_query, conn=my_conn, rows=my_rows)")
+    warn(msg, DeprecationWarning)
+    logger.info(f"Executing many (chunksize={CHUNKSIZE})")
+    logger.debug(f"Executing copy:\n\n{dest_table}\n\nagainst\n\n{conn}")
+
+    helper = DB_HELPER_FACTORY.from_conn(conn)
+    processed = 0
+
+    with helper.cursor(conn) as cursor:
+        string_iterator = StringIteratorIO((
+            '|'.join(map(clean_csv_value, row)) + '\n'
+            for row in rows
+        ))
+        cursor.copy_from(string_iterator, dest_table, sep='|', size=CHUNKSIZE)
+
+
 def executemany(query, rows, conn, commit_chunks=True):
     """
     Use query to insert/update data from rows to database at conn.  This
@@ -274,6 +302,16 @@ def executemany(query, rows, conn, commit_chunks=True):
         conn.commit()
 
     logger.info(f'{processed} rows processed in total')
+
+
+def copy_rows_postgres(select_query, source_conn, dest_table, dest_conn,
+                       parameters=(), transform=None, commit_chunks=True,
+                       read_lob=False):
+    rows_generator = iter_rows(select_query, source_conn,
+                               parameters=parameters, transform=transform,
+                               read_lob=read_lob)
+    executemany_postgres(dest_table, rows_generator, dest_conn,
+                         commit_chunks=commit_chunks)
 
 
 def copy_rows(select_query, source_conn, insert_query, dest_conn,

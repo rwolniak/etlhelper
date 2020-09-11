@@ -2,6 +2,7 @@
 Database helper for Postgres
 """
 from etlhelper.db_helpers.db_helper import DbHelper
+from psycopg2.extras import execute_batch
 
 
 class PostgresDbHelper(DbHelper):
@@ -59,6 +60,5 @@ class PostgresDbHelper(DbHelper):
         # See following for background:
         # https://github.com/psycopg/psycopg2/issues/491#issuecomment-276551038
         # https://www.compose.com/articles/formatted-sql-in-python-with-psycopgs-mogrify/
-        from psycopg2.extras import execute_batch
 
         execute_batch(cursor, query, chunk, page_size=len(chunk))
