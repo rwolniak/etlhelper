@@ -51,9 +51,11 @@ def iter_chunks(select_query, conn, parameters=(),
                  f"{parameters}\n\nagainst\n\n{conn}")
 
     helper = DB_HELPER_FACTORY.from_conn(conn)
+    logger.info(f'POSTGRES- iter_chunks - before opening cursor')
     with helper.cursor(conn) as cursor:
         # Run query
         try:
+            logger.info(f'POSTGRES- iter_chunks - executing query')
             cursor.execute(select_query, parameters)
         except helper.sql_exceptions as exc:
             # Even though we haven't modified data, we have to rollback to
@@ -65,10 +67,13 @@ def iter_chunks(select_query, conn, parameters=(),
         # Set row factory
         create_row = row_factory(cursor)
 
+        logger.info(f'POSTGRES- iter_chunks - row factory set up')
+
         # Parse results
         first_pass = True
         while True:
             rows = cursor.fetchmany(CHUNKSIZE)
+            logger.info(f'POSTGRES- iter_chunks - fetched a chunk')
 
             # No more rows to process
             if not rows:
@@ -89,11 +94,13 @@ def iter_chunks(select_query, conn, parameters=(),
 
             # Apply row_factory
             rows = (create_row(row) for row in rows)
+            logger.info(f'POSTGRES- iter_chunks - applied row factory')
 
             # Apply transform
             if transform:
                 rows = transform(rows)
 
+            logger.info(f'POSTGRES- iter_chunks - yielding rows {rows}')
             # Return data
             yield rows
             first_pass = False
@@ -115,10 +122,12 @@ def iter_rows(select_query, conn, parameters=(),
                       returns an iterable of rows (possibly of different shape)
     :param read_lob: bool, convert Oracle LOB objects to strings
     """
+    logger.info(f'POSTGRES- iter_rows - before calling iter_chunks')
     for chunk in iter_chunks(select_query, conn, row_factory=row_factory,
                              parameters=parameters, transform=transform,
                              read_lob=read_lob):
         for row in chunk:
+            logger.info(f'POSTGRES- iter_rows - {row}')
             yield row
 
 
@@ -235,6 +244,7 @@ def executemany_postgres(dest_table, rows, conn, commit_chunks=True):
             '|'.join(map(clean_csv_value, row)) + '\n'
             for row in rows
         ))
+        logger.info('POSTGRES- string_iterator created')
         cursor.copy_from(string_iterator, dest_table, sep='|', size=CHUNKSIZE)
 
 
@@ -310,6 +320,7 @@ def copy_rows_postgres(select_query, source_conn, dest_table, dest_conn,
     rows_generator = iter_rows(select_query, source_conn,
                                parameters=parameters, transform=transform,
                                read_lob=read_lob)
+    rows_generator = 
     executemany_postgres(dest_table, rows_generator, dest_conn,
                          commit_chunks=commit_chunks)
 
