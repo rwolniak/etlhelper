@@ -12,8 +12,8 @@ from etlhelper.exceptions import (
     ETLHelperInsertError,
     ETLHelperQueryError,
 )
-from io_iterator import StringIteratorIO
-from io import Optional, Any
+from etlhelper.io_iterator import StringIteratorIO
+from typing import Optional, Any
 
 logger = logging.getLogger('etlhelper')
 CHUNKSIZE = 8192
