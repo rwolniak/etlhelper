@@ -64,11 +64,6 @@ def iter_chunks(select_query, conn, parameters=(),
             msg = f"SQL query raised an error.\n\n{select_query}\n\n{exc}\n"
             raise ETLHelperExtractError(msg)
 
-        # Set row factory
-        create_row = row_factory(cursor)
-
-        logger.info(f'POSTGRES- iter_chunks - row factory set up')
-
         # Parse results
         first_pass = True
         while True:
@@ -91,20 +86,23 @@ def iter_chunks(select_query, conn, parameters=(),
             # Convert Oracle LOBs to strings if required
             if read_lob:
                 rows = _read_lob(rows)
-
-            # Apply row_factory
-            rows_postgres = StringIteratorIO((
-                '|'.join(map(clean_csv_value, row)) + '\n' for row in rows))
-            logger.info(f'POSTGRES- iter_chunks - applied row factory')
-
-            # Apply transform
-            if transform:
-                rows = transform(rows)
-
-            logger.info(f'POSTGRES- iter_chunks - yielding rows {rows_postgres}')
-            # Return data
-            yield rows_postgres
+            logger.info(f'POSTGRES- yield returned rows, then do something with them once returned')
+            yield rows
             first_pass = False
+
+            # # Apply row_factory
+            # rows_postgres = StringIteratorIO((
+            #     '|'.join(map(clean_csv_value, row)) + '\n' for row in rows))
+            # logger.info(f'POSTGRES- iter_chunks - converted to stringiteratorio')
+
+            # # Apply transform
+            # if transform:
+            #     rows = transform(rows)
+
+            # logger.info(f'POSTGRES- iter_chunks - yielding rows {rows_postgres}')
+            # # Return data
+            # yield rows_postgres
+            # first_pass = False
 
 
 def iter_rows(select_query, conn, parameters=(),
@@ -242,12 +240,12 @@ def executemany_postgres(dest_table, rows, conn, commit_chunks=True):
     processed = 0
 
     with helper.cursor(conn) as cursor:
-        # string_iterator = StringIteratorIO((
-        #     '|'.join(map(clean_csv_value, row)) + '\n'
-        #     for row in rows
-        # ))
+        string_iterator = StringIteratorIO((
+            '|'.join(map(clean_csv_value, row)) + '\n'
+            for row in rows
+        ))
         logger.info('POSTGRES- string_iterator created')
-        cursor.copy_from(rows, dest_table, sep='|', size=CHUNKSIZE)
+        cursor.copy_from(string_iterator, dest_table, sep='|', size=CHUNKSIZE)
 
 
 def executemany(query, rows, conn, commit_chunks=True):
