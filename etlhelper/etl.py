@@ -320,7 +320,6 @@ def copy_rows_postgres(select_query, source_conn, dest_table, dest_conn,
     rows_generator = iter_rows(select_query, source_conn,
                                parameters=parameters, transform=transform,
                                read_lob=read_lob)
-    rows_generator = 
     executemany_postgres(dest_table, rows_generator, dest_conn,
                          commit_chunks=commit_chunks)
 
