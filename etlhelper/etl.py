@@ -93,7 +93,6 @@ def iter_chunks(select_query, conn, parameters=(),
                 rows = _read_lob(rows)
 
             # Apply row_factory
-            rows = (create_row(row) for row in rows)
             rows_postgres = StringIteratorIO((
                 '|'.join(map(clean_csv_value, row)) + '\n' for row in rows))
             logger.info(f'POSTGRES- iter_chunks - applied row factory')
@@ -102,7 +101,7 @@ def iter_chunks(select_query, conn, parameters=(),
             if transform:
                 rows = transform(rows)
 
-            logger.info(f'POSTGRES- iter_chunks - yielding rows {rows}')
+            logger.info(f'POSTGRES- iter_chunks - yielding rows {rows_postgres}')
             # Return data
             yield rows_postgres
             first_pass = False
@@ -224,6 +223,7 @@ def dump_rows(select_query, conn, output_func=print, parameters=(),
 
 
 def clean_csv_value(value: Optional[Any]) -> str:
+    logger.info(f'POSTGRES- clean_csv_value {value}')
     if value is None:
         return r'\N'
     return str(value).replace('\n', '\\n')
