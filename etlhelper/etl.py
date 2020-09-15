@@ -59,12 +59,10 @@ def iter_chunks_postgres(select_query, conn, parameters=(),
             # Convert Oracle LOBs to strings if required
             if read_lob:
                 rows = _read_lob(rows)
-            csv_file = io.StringIO()
-            cw = csv.writer(csv_file, delimiter='|', quoting=csv.QUOTE_NONNUMERIC)
-            cw.writerows(rows)
-            csv_file.seek(0)
-            yield csv_file
+
+            yield rows
             first_pass = False
+
 
 # iter_chunks is where data are retrieved from source database
 # All data extraction processes call this function.
@@ -152,7 +150,11 @@ def iter_rows_postgres(select_query, conn, parameters=(),
     for chunk in iter_chunks_postgres(select_query, conn, row_factory=row_factory,
                                       parameters=parameters, transform=transform,
                                       read_lob=read_lob):
-        yield chunk
+        for row in chunk:
+            csv_file = io.StringIO()
+            cw = csv.writer(csv_file, delimiter='|', quoting=csv.QUOTE_NONNUMERIC)
+            cw.writerows(row)
+            yield csv_file.getvalue()
 
 
 def iter_rows(select_query, conn, parameters=(),
