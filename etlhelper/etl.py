@@ -5,6 +5,8 @@ from itertools import zip_longest, islice
 import logging
 from warnings import warn
 
+import csv
+import io
 from etlhelper.row_factories import namedtuple_rowfactory
 from etlhelper.db_helper_factory import DB_HELPER_FACTORY
 from etlhelper.exceptions import (
@@ -61,7 +63,7 @@ def iter_chunks(select_query, conn, parameters=(),
             raise ETLHelperExtractError(msg)
 
         # Set row factory
-        create_row = row_factory(cursor)
+        # create_row = row_factory(cursor)
 
         # Parse results
         first_pass = True
@@ -85,15 +87,22 @@ def iter_chunks(select_query, conn, parameters=(),
             if read_lob:
                 rows = _read_lob(rows)
 
+            csv_file = io.StringIO()
+            cw = csv.writer(csv_file, delimiter='|', quoting=csv.QUOTE_NONNUMERIC)
+            for row in rows:
+                cw.writerow(row)
+            csv_file.seek(0)
+            yield csv_file
+
             # Apply row_factory
-            rows = (create_row(row) for row in rows)
+            # rows = (create_row(row) for row in rows)
 
             # Apply transform
-            if transform:
-                rows = transform(rows)
+            # if transform:
+            #     rows = transform(rows)
 
             # Return data
-            yield rows
+            # yield rows
             first_pass = False
 
 
@@ -116,8 +125,9 @@ def iter_rows(select_query, conn, parameters=(),
     for chunk in iter_chunks(select_query, conn, row_factory=row_factory,
                              parameters=parameters, transform=transform,
                              read_lob=read_lob):
-        for row in chunk:
-            yield row
+        # for row in chunk:
+        #     yield row
+        yield chunk
 
 
 def get_rows(select_query, conn, parameters=(),
