@@ -61,9 +61,7 @@ def iter_chunks_postgres(select_query, conn, parameters=(),
                 rows = _read_lob(rows)
             csv_file = io.StringIO()
             cw = csv.writer(csv_file, delimiter='|', quoting=csv.QUOTE_NONNUMERIC)
-
-            for row in rows:
-                cw.writerow(row)
+            cw.writerows(rows)
             csv_file.seek(0)
             yield csv_file
             first_pass = False
@@ -152,8 +150,8 @@ def iter_rows_postgres(select_query, conn, parameters=(),
                        row_factory=namedtuple_rowfactory,
                        transform=None, read_lob=False):
     for chunk in iter_chunks_postgres(select_query, conn, row_factory=row_factory,
-                             parameters=parameters, transform=transform,
-                             read_lob=read_lob):
+                                      parameters=parameters, transform=transform,
+                                      read_lob=read_lob):
         yield chunk
 
 
