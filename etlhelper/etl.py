@@ -151,7 +151,7 @@ def iter_chunks(select_query, conn, parameters=(),
 def iter_rows_postgres(select_query, conn, parameters=(),
                        row_factory=namedtuple_rowfactory,
                        transform=None, read_lob=False):
-    for chunk in iter_chunks(select_query, conn, row_factory=row_factory,
+    for chunk in iter_chunks_postgres(select_query, conn, row_factory=row_factory,
                              parameters=parameters, transform=transform,
                              read_lob=read_lob):
         yield chunk
