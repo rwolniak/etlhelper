@@ -19,6 +19,55 @@ logger = logging.getLogger('etlhelper')
 CHUNKSIZE = 5000
 
 
+def iter_chunks_postgres(select_query, conn, parameters=(),
+                         row_factory=namedtuple_rowfactory,
+                         transform=None, read_lob=False):
+    logger.info("Fetching rows")
+    logger.debug(f"Fetching:\n\n{select_query}\n\nwith parameters:\n\n"
+                 f"{parameters}\n\nagainst\n\n{conn}")
+
+    helper = DB_HELPER_FACTORY.from_conn(conn)
+    with helper.cursor(conn) as cursor:
+        # Run query
+        try:
+            cursor.execute(select_query, parameters)
+        except helper.sql_exceptions as exc:
+            # Even though we haven't modified data, we have to rollback to
+            # clear the failed transaction before any others can be started.
+            conn.rollback()
+            msg = f"SQL query raised an error.\n\n{select_query}\n\n{exc}\n"
+            raise ETLHelperExtractError(msg)
+
+        # Parse results
+        first_pass = True
+        while True:
+            rows = cursor.fetchmany(CHUNKSIZE)
+
+            # No more rows to process
+            if not rows:
+                if first_pass:
+                    msg = "No rows returned"
+                else:
+                    if cursor.rowcount == -1:
+                        # SQLite3 drive doesn't support row count (always -1)
+                        msg = "All rows returned"
+                    else:
+                        msg = f"{cursor.rowcount} rows returned"
+                logger.info(msg)
+                return
+
+            # Convert Oracle LOBs to strings if required
+            if read_lob:
+                rows = _read_lob(rows)
+            csv_file = io.StringIO()
+            cw = csv.writer(csv_file, delimiter='|', quoting=csv.QUOTE_NONNUMERIC)
+
+            for row in rows:
+                cw.writerow(row)
+            csv_file.seek(0)
+            yield csv_file
+            first_pass = False
+
 # iter_chunks is where data are retrieved from source database
 # All data extraction processes call this function.
 def iter_chunks(select_query, conn, parameters=(),
@@ -63,7 +112,7 @@ def iter_chunks(select_query, conn, parameters=(),
             raise ETLHelperExtractError(msg)
 
         # Set row factory
-        # create_row = row_factory(cursor)
+        create_row = row_factory(cursor)
 
         # Parse results
         first_pass = True
@@ -87,23 +136,25 @@ def iter_chunks(select_query, conn, parameters=(),
             if read_lob:
                 rows = _read_lob(rows)
 
-            csv_file = io.StringIO()
-            cw = csv.writer(csv_file, delimiter='|', quoting=csv.QUOTE_NONNUMERIC)
-            for row in rows:
-                cw.writerow(row)
-            csv_file.seek(0)
-            yield csv_file
-
             # Apply row_factory
-            # rows = (create_row(row) for row in rows)
+            rows = (create_row(row) for row in rows)
 
             # Apply transform
-            # if transform:
-            #     rows = transform(rows)
+            if transform:
+                rows = transform(rows)
 
             # Return data
-            # yield rows
+            yield rows
             first_pass = False
+
+
+def iter_rows_postgres(select_query, conn, parameters=(),
+                       row_factory=namedtuple_rowfactory,
+                       transform=None, read_lob=False):
+    for chunk in iter_chunks(select_query, conn, row_factory=row_factory,
+                             parameters=parameters, transform=transform,
+                             read_lob=read_lob):
+        yield chunk
 
 
 def iter_rows(select_query, conn, parameters=(),
@@ -125,9 +176,8 @@ def iter_rows(select_query, conn, parameters=(),
     for chunk in iter_chunks(select_query, conn, row_factory=row_factory,
                              parameters=parameters, transform=transform,
                              read_lob=read_lob):
-        # for row in chunk:
-        #     yield row
-        yield chunk
+        for row in chunk:
+            yield row
 
 
 def get_rows(select_query, conn, parameters=(),
